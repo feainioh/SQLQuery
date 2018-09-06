@@ -1,0 +1,8 @@
+[Calibration]
+CALPosX=498.460
+CALPosY=78.200
+CalRatio_X=0.000000000
+CalRatio_Y=0.000000000
+[Default]
+MarkExposure=2500
+MatrixExposure=3500

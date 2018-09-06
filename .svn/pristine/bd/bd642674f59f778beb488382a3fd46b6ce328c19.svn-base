@@ -1,0 +1,503 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Data.SqlClient;
+using System.Data;
+using System.Data.OleDb;
+using PylonLiveView;
+using System.Windows.Forms;
+//using IBM.Data.DB2;
+
+namespace PylonLiveView
+{
+    public class DBQuery
+    {
+        MyFunctions myfunc = new MyFunctions();
+        SqlConnection m_conn_DBSave = null;
+        SqlConnection m_conn_BARDATA = null;
+        SqlConnection m_conn_BaseData = null;
+        SqlConnection m_conn_resultUpload = null;  //用于部品上传
+        const string str_connstr_BaseData = "Data Source=SUZSQLV01;database=BASEDATA;uid=suzmektec;pwd=suzmek;Connect Timeout=5";
+        const string str_connstr_BARDATA = "Data Source=SUZSQLV01;database=BARDATA;uid=suzmektec;pwd=suzmek;Connect Timeout=1";
+        const string str_DBSave_A41SENSOR = "Data Source=SUZSQLV01;database=A41SENSOR;uid=suzmektec;pwd=suzmek;Connect Timeout=1";
+        const string str_DBSave_A42SENSOR = "Data Source=SUZSQLV01;database=A42SENSOR;uid=suzmektec;pwd=suzmek;Connect Timeout=1";
+        string str_as400 = "Provider=IBMDA400.DataSource.1;Password=MMCSUSR;Persist Security Info=True;User ID=MMCSUSR;Data Source=mmcsas1;Protection Level=None;Initial Catalog=;Transport Product=Client Access;SSL=DEFAULT;Force Translate=65535;Default Collection=MEKFLIB;Convert Date Time To Char=TRUE;Catalog Library List=;Cursor Sensitivity=3";
+
+        string m_sp_MICBarcodeLink = "FP_BarcodeLink";
+        public String ServerName = "";
+        public String DBNAME = "";
+        public String AccountName = "";
+        public String Password = "";
+        public DBQuery()
+        {
+            m_conn_BARDATA = new SqlConnection(str_connstr_BARDATA);
+            m_conn_BaseData = new SqlConnection(str_connstr_BaseData);
+            /*待修改成配置文档模式*/
+            switch (GlobalVar.gl_ProductModel)
+            {
+                case "A41SENSOR":
+                    m_conn_DBSave = new SqlConnection(str_DBSave_A41SENSOR);
+                    break;
+                case "A42SENSOR":
+                    m_conn_DBSave = new SqlConnection(str_DBSave_A42SENSOR);
+                    break;
+            }
+        }
+
+        public DBQuery(string connectstring)
+        {
+            m_conn_resultUpload = new SqlConnection(connectstring);
+        }
+
+        //lot号查询出对应的品目
+        public String checkLotByS400(String lot)   
+        {
+            OleDbConnection con = getConnection3();
+            OleDbDataReader reader = null;
+            String sql = "select ZHSZNO,ZHLTNO,ZHHMCD from MZSODRP where ZHSZNO='" + lot.Substring(0, 8) +
+           "'" + " and ZHLTNO ='" + lot.Substring(8, 3) + "'";
+            String result = "";
+            try
+            {
+                con.Open();
+                OleDbCommand comm = new OleDbCommand(sql, con);
+                comm.CommandTimeout = 1;
+                reader = comm.ExecuteReader();
+                if (reader.Read())
+                {
+                    result = reader.GetValue(2).ToString();
+                }
+                reader.Close();
+                con.Close();
+
+            }
+            catch
+            {
+                if (reader != null)
+                {
+                    reader.Close();
+                }
+                con.Close();
+                return result;
+
+            }
+            return result;
+        }
+
+        //根據合格票號查詢品目信息
+        public AS400LotInfo GetAs400LotInfoByQualifiedTicketNo(string QualifiedNo)
+        {
+            AS400LotInfo info = new AS400LotInfo();
+            try
+            {
+                OleDbConnection con = getConnection3();
+                //String sql = "SELECT ZHSTC2,ZHREDO,CPVZNO,CPLTNO,CPHMCD  "
+                //    + " FROM MZSODRP,MWCPNTP,CPXPCS WHERE ZHSZNO=CPVZNO AND ZHLTNO=CPLTNO AND CPCTLN= '" + QualifiedNo + "'";
+
+                String sql = "SELECT ZHSTC2,ZHREDO,CPVZNO,CPLTNO,CPHMCD,CPXPCS  "
+                    + " FROM MZSODRP,MWCPNTP WHERE ZHSZNO=CPVZNO AND ZHLTNO=CPLTNO AND CPCTLN= '" + QualifiedNo + "'";
+                OleDbCommand cmd = new OleDbCommand();
+                cmd.Connection = con;
+                cmd.CommandText = sql;
+                con.Open();
+                OleDbDataAdapter adapter = new OleDbDataAdapter(cmd);
+                DataTable table = new DataTable();
+                adapter.Fill(table);
+                info.Pinmu = table.Rows[0]["CPHMCD"].ToString();
+                info.Lot_Head = table.Rows[0]["CPVZNO"].ToString();
+                info.Lot_End = table.Rows[0]["CPLTNO"].ToString();
+                info.StorageStatus = table.Rows[0]["ZHREDO"].ToString();
+                //info.Pinmu = table.Rows[0]["ZHREDO"].ToString();
+                info.TotalCount = Convert.ToInt32(table.Rows[0]["CPXPCS"].ToString());
+            }
+            catch
+            { }
+            return info;
+        }
+
+        private OleDbConnection getConnection3()   //AS400
+        {
+            try
+            {
+                str_as400 = "Provider=IBMDA400.DataSource.1;Password=MMCSUSR;Persist Security Info=True;User ID=MMCSUSR;Data Source=mmcsas1;Protection Level=None;Initial Catalog=;Transport Product=Client Access;SSL=DEFAULT;Force Translate=65535;Default Collection=" + GlobalVar.gl_strDefaultODBC + ";Convert Date Time To Char=TRUE;Catalog Library List=;Cursor Sensitivity=3";
+                OleDbConnection _ocon = new OleDbConnection();
+                _ocon = new OleDbConnection(str_as400);
+                return _ocon;
+            }
+            catch { return new OleDbConnection(); }
+        }
+
+        public DataTable get_database_BaseData(string theSQL)
+        {
+            try
+            {
+                SqlDataAdapter adapter = new SqlDataAdapter(theSQL, m_conn_BaseData);
+                DataSet theDataSet = new DataSet();
+                adapter.Fill(theDataSet);
+                return theDataSet.Tables[0];
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        public DataTable get_database_BARDATA(string theSQL)
+        {
+            try
+            {
+                SqlDataAdapter adapter = new SqlDataAdapter(theSQL, m_conn_BARDATA);
+                DataSet theDataSet = new DataSet();
+                adapter.Fill(theDataSet);
+                return theDataSet.Tables[0];
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        /*
+        /// <summary>
+        /// 检查条码结果并且插入数据-FT
+        /// </summary>
+        /// <returns>
+        ///</returns>
+        public int CheckSNInfoAndSaveDB(string meksSN)
+        {
+            string m_Barcode = meksSN;
+            try
+            {
+                SqlCommand cmd = new SqlCommand();
+                cmd.Connection = m_conn_DBSave;
+                m_conn_DBSave.Open();
+                cmd.CommandType = CommandType.StoredProcedure;
+                cmd.Parameters.Add("@SerialNo", SqlDbType.VarChar,30).Value = m_Barcode;
+                cmd.Parameters.Add("@LotNo", SqlDbType.VarChar, 30).Value = GlobalVar.gl_str_LotNo;
+                cmd.Parameters.Add("@ProductType", SqlDbType.NVarChar, 30).Value = GlobalVar.gl_str_MPN;
+                cmd.Parameters.Add("RETURN_VALUE", SqlDbType.Int).Direction = ParameterDirection.ReturnValue;
+                cmd.ExecuteNonQuery();
+                int reValue = int.Parse(cmd.Parameters["RETURN_VALUE"].Value.ToString());
+                m_conn_DBSave.Close();
+                return reValue;
+            }
+            catch 
+            {
+                return 98;
+            }
+        }
+        
+        #region  ------------将NG记录统计入数据库，废弃不用-----------
+        /// <summary>
+        /// 更新整盘的不良数据至database
+        ///用作整盘扫和 单PCS补扫，都需要更新数据库，然后从数据库中获得当前LOT的NG信息，再更新本地
+        /// OQC与FT-CHECK公用一个函数
+        /// </summary>
+        /// <returns></returns>
+        public void UpdateFailureCount(NGCategory category, int testCount)
+        {
+            try
+            {
+                SqlCommand cmd = new SqlCommand();
+                cmd.Connection = m_conn_DBSave;
+                m_conn_DBSave.Open();
+                //待修改成配置文档模式
+                //switch (Global.GlobalVar.gl_product_type)
+                //{
+                //    case enum_productType.A31SENSOR:
+                //        if (GlobalVar.gl_test_Mode == 0)
+                //        {
+                //            cmd.CommandText = m_sp_UpdateFailureCount_A31SENSOR_FTCheck;
+                //        }
+                //        else
+                //        {
+                //            cmd.CommandText = m_sp_UpdateFailureCount_A31SENSOR_OQC;
+                //        }
+                //        break;
+                //    case enum_productType.A33SENSOR:
+                //        if (GlobalVar.gl_test_Mode == 0)
+                //        {
+                //            cmd.CommandText = m_sp_UpdateFailureCount_A33SENSOR_FTCheck;
+                //        }
+                //        else
+                //        {
+                //            cmd.CommandText = m_sp_UpdateFailureCount_A33SENSOR_OQC;
+                //        }
+                //        break;
+                //}
+                cmd.CommandType = CommandType.StoredProcedure;
+                cmd.Parameters.Add("@LotNo", SqlDbType.VarChar, 30).Value = GlobalVar.gl_str_LotNo;
+                cmd.Parameters.Add("@SHEETCOUNT", SqlDbType.Int).Value = testCount;
+                cmd.Parameters.Add("@ICTNG", SqlDbType.Int).Value = category.m_ICTNG;
+                cmd.Parameters.Add("@NOICTDATA", SqlDbType.Int).Value = category.m_NoICTData;
+                //if (Global.GlobalVar.gl_test_Mode == 0)
+                //{
+                //    cmd.Parameters.Add("@PROXNG", SqlDbType.Int).Value = category.m_ProxNG;
+                //    cmd.Parameters.Add("@NOPROXDATA", SqlDbType.Int).Value = category.m_NoProxData;
+                //    cmd.Parameters.Add("@ALSNG", SqlDbType.Int).Value = category.m_ALSNG;
+                //    cmd.Parameters.Add("@NOALSDATA", SqlDbType.Int).Value = category.m_NoALSData;
+                //    cmd.Parameters.Add("@NOPROXLINK", SqlDbType.Int).Value = category.m_NoProxLink;
+                //}
+                //else
+                //{
+                //    cmd.Parameters.Add("@PINMUNG", SqlDbType.Int).Value = category.m_PINMUNG;
+                //}
+                cmd.Parameters.Add("@EEEENG", SqlDbType.Int).Value = category.m_PINMUNG;
+                cmd.Parameters.Add("@LOTNONG", SqlDbType.Int).Value = category.m_LotNoNG;
+                cmd.Parameters.Add("@DECODEFAIL", SqlDbType.Int).Value = category.m_DecodeFail;
+                cmd.Parameters.Add("@DUPLICATETEST", SqlDbType.Int).Value = category.m_DuplicateTest;
+                cmd.ExecuteNonQuery();
+                m_conn_DBSave.Close();
+            }
+            catch
+            { }
+        }
+
+        public NGCategory GetFailureCountByLotNo_FTCheck(string Lot)
+        {
+            NGCategory result = new NGCategory();
+            try
+            {
+                string sql = "SELECT top 1 *  FROM [dbo].[BarcodeCheckFailureCount]";
+                SqlCommand cmd = new SqlCommand(sql, m_conn_DBSave);
+                m_conn_DBSave.Open();
+                SqlDataAdapter adapter = new SqlDataAdapter(cmd);
+                DataTable table = new DataTable();
+                adapter.Fill(table);
+                result.m_TotalPcs = Convert.ToInt32(table.Rows[0]["TOTALCOUNT"].ToString());
+                result.m_ICTNG = Convert.ToInt32(table.Rows[0]["ICTNG"].ToString());
+                result.m_ALSNG = Convert.ToInt32(table.Rows[0]["ALSNG"].ToString());
+                result.m_ProxNG = Convert.ToInt32(table.Rows[0]["PROXNG"].ToString());
+                result.m_NoICTData = Convert.ToInt32(table.Rows[0]["ICTDATANULL"].ToString());
+                result.m_NoALSData = Convert.ToInt32(table.Rows[0]["ALSDATANULL"].ToString());
+                result.m_NoProxData = Convert.ToInt32(table.Rows[0]["PROXDATANULL"].ToString());
+                result.m_NoProxLink = Convert.ToInt32(table.Rows[0]["PROXLINKNULL"].ToString());
+                result.m_EEEENG = Convert.ToInt32(table.Rows[0]["EEEENG"].ToString());
+                result.m_LotNoNG = Convert.ToInt32(table.Rows[0]["LOTNONG"].ToString());
+                result.m_DecodeFail = Convert.ToInt32(table.Rows[0]["DECODEFAIL"].ToString());
+                result.m_DuplicateTest = Convert.ToInt32(table.Rows[0]["DUPLICATETEST"].ToString());
+            }
+            catch { }
+            return result;
+        }
+
+        public NGCategory GetFailureCountByLotNo_OQC(string Lot)
+        {
+            NGCategory result = new NGCategory();
+            try
+            {
+                string sql = "SELECT top 1 *  FROM [dbo].[m_sp_UpdateFailureCount_A33SENSOR_OQC]";
+                SqlCommand cmd = new SqlCommand(sql, m_conn_DBSave);
+                m_conn_DBSave.Open();
+                SqlDataAdapter adapter = new SqlDataAdapter(cmd);
+                DataTable table = new DataTable();
+                adapter.Fill(table);
+                result.m_TotalPcs = Convert.ToInt32(table.Rows[0]["TOTALCOUNT"].ToString());
+                result.m_ICTNG = Convert.ToInt32(table.Rows[0]["ICTNG"].ToString());
+                result.m_NoICTData = Convert.ToInt32(table.Rows[0]["ICTDATANULL"].ToString());
+                result.m_PINMUNG = Convert.ToInt32(table.Rows[0]["PINMUNG"].ToString());
+                result.m_EEEENG = Convert.ToInt32(table.Rows[0]["EEEENG"].ToString());
+                result.m_LotNoNG = Convert.ToInt32(table.Rows[0]["LOTNONG"].ToString());
+                result.m_DecodeFail = Convert.ToInt32(table.Rows[0]["DECODEFAIL"].ToString());
+                result.m_DuplicateTest = Convert.ToInt32(table.Rows[0]["DUPLICATETEST"].ToString());
+            }
+            catch { }
+            return result;
+        }
+        #endregion
+         
+        public int dbQueryResult(string _DecodeSN)
+        {
+            try
+            {
+                if (myfunc.checkStringIsLegal(_DecodeSN, 3) && (_DecodeSN.Length == GlobalVar.gl_length_PCSBarcodeLength))
+                {
+                    //if (Global.GlobalVar.gl_test_Mode == 0)
+                    //{
+                    //    return CheckSNInfoAndSaveDB(_DecodeSN);
+                    //}
+                    //else if (Global.GlobalVar.gl_test_Mode == 1)
+                    //{
+                    //    return CheckSNInfoAndSaveDB_OQC(_DecodeSN);
+                    //}
+                }
+                else
+                {
+                    return 10; //條碼解析失敗--對應visioPanel A
+                }
+            }
+            catch{ }
+            return 98;
+        }
+        */
+
+        public bool setDataBaseMessage(String lotNumber)
+        {
+            try
+            {
+                clearDBString();
+                if (lotNumber == "99999999997")
+                {
+                    ServerName = "A71DOCK"; DBNAME = "BARCODELINK"; AccountName = "111"; Password = "111";
+                    GlobalVar.gl_ProductModel = "A71SENSOR";
+                    GlobalVar.gl_str_MPN = "NJ1234-56";
+                    goto test;
+                    return true;
+                }
+                if (lotNumber == "99999999998")
+                {
+                    ServerName =  "A72SENSOR";DBNAME = "BARCODELINK"; AccountName = "111"; Password = "111";
+                    GlobalVar.gl_ProductModel = "A72SENSOR";
+                    GlobalVar.gl_str_MPN = "NJ1234-56";
+                    goto test;
+                    return true;
+                }
+                if (lotNumber == "99999999999")
+                {
+                    ServerName = "A75SENSOR"; DBNAME = "BARCODELINK"; AccountName = "111"; Password = "111";
+                    GlobalVar.gl_ProductModel = "A75SENSOR";
+                    GlobalVar.gl_str_MPN = "NJ1234-57";
+                    goto test;
+                    return true;
+                }
+
+                GlobalVar.gl_str_MPN = checkLotByS400(lotNumber); //根据lot号获得品目
+                if (GlobalVar.gl_str_MPN == "")
+                {
+                    MessageBox.Show("當前Lot對應品目信息為空，請確認！");
+                    return false;
+                }
+                getProductModel(GlobalVar.gl_str_MPN);  //获得productmodel和工程号EEEE
+                if (GlobalVar.gl_ProductModel == "" || GlobalVar.EEEE == "")
+                {
+                    MessageBox.Show("當前品目無對應產品型號信息，請確認！");
+                    return false;
+                }
+                getDataBaseConnectStringFromDB(GlobalVar.gl_ProductModel);   //取得数据库配置字符
+                test:
+                if (!setDataBaseConnectString())                        //设置数据库字符串
+                    return false;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public void clearDBString()
+        {
+            GlobalVar.gl_DataBaseConnectString = "";   //数据库字符串，初始数据库时赋值
+            GlobalVar.gl_ProductModel = "";    //品目名称
+            // GlobalVar.FlowId=0;         //关联区分
+            //GlobalVar.EEEE = "";  //工程代码
+            GlobalVar.gl_str_MPN = "";   //品目
+        }
+
+        //根据品目号获得productmodel(机种名称)和工程号EEEE
+        public void getProductModel(String product)
+        {
+            SqlConnection con = new SqlConnection(str_connstr_BaseData);
+            SqlDataReader reader = null;
+            String sql = "select ProductModel,EEEE from ProjectBasic Where Product='" + product + "'";
+            try
+            {
+                con.Open();
+                SqlCommand comm = new SqlCommand(sql, con);
+                comm.CommandTimeout = 1;
+                reader = comm.ExecuteReader();
+                if (reader.Read())
+                {
+                    GlobalVar.gl_ProductModel = reader.GetValue(0).ToString().Trim();
+                    GlobalVar.EEEE = reader.GetValue(1).ToString().Trim();
+                }
+                reader.Close();
+                con.Close();
+
+            }
+            catch
+            {
+                if (reader != null)
+                {
+                    reader.Close();
+                }
+                con.Close();
+            }
+        }
+
+        //根据ProductModle(机种名称)获取数据库连接
+        public void getDataBaseConnectStringFromDB(String ProductModle)
+        {
+            SqlConnection con = new SqlConnection(str_connstr_BaseData);
+            SqlDataReader reader = null;
+            String sql = "select DBNAME,ServerName,AccountName,Password from ModelList Where ProductModel='" + ProductModle.Trim() + "'";
+            try
+            {
+                con.Open();
+                SqlCommand comm = new SqlCommand(sql, con);
+                comm.CommandTimeout = 1;
+                reader = comm.ExecuteReader();
+                if (reader.Read())
+                {
+                    DBNAME = reader.GetValue(0).ToString().Trim();
+                    ServerName = reader.GetValue(1).ToString().Trim();
+                    AccountName = reader.GetValue(2).ToString().Trim();
+                    Password = reader.GetValue(3).ToString().Trim();
+                }
+                reader.Close();
+                con.Close();
+
+            }
+            catch
+            {
+                if (reader != null)
+                {
+                    reader.Close();
+                }
+                con.Close();
+            }
+        }
+
+        public bool setDataBaseConnectString()
+        {
+            if (ServerName == "" || DBNAME == "" || AccountName == "" || Password == "")
+            {
+                return false;
+            }
+            else
+            {
+                GlobalVar.gl_DataBaseConnectString = "Data Source=" + ServerName + ";database=" + DBNAME + ";";
+                return true;
+            }
+        }
+
+        public int MICBarcodeLink(string SheetBarcode, string MICSN, string posnum, int flowid)
+        {
+            int result = 98;
+            try
+            {
+                SqlCommand cmd = new SqlCommand();
+                cmd.Connection = m_conn_resultUpload;
+                cmd.CommandType = CommandType.StoredProcedure;
+                cmd.CommandText = m_sp_MICBarcodeLink;
+
+                cmd.Parameters.Add("@ShtBarcode", SqlDbType.VarChar, 38).Value = SheetBarcode;
+                cmd.Parameters.Add("@Barcode", SqlDbType.VarChar, 30).Value = MICSN;
+                cmd.Parameters.Add("@PcsIndex", SqlDbType.Int).Value = Convert.ToInt32(posnum); ;
+                cmd.Parameters.Add("@FlowId", SqlDbType.Int).Value = flowid; //待确认
+                cmd.Parameters.Add("@ProductModel", SqlDbType.VarChar, 15).Value = GlobalVar.gl_ProductModel;
+                cmd.Parameters.Add("@CreateUser", SqlDbType.VarChar, 15).Value = "SANTECPC";
+                cmd.Parameters.Add("RETURN_VALUE", SqlDbType.Int).Direction = ParameterDirection.ReturnValue;
+                if (m_conn_resultUpload.State.ToString() == "Closed")
+                {
+                    m_conn_resultUpload.Open();
+                }
+                cmd.ExecuteNonQuery();
+                result = int.Parse(cmd.Parameters["RETURN_VALUE"].Value.ToString());
+            }
+            catch { result = 98; }
+            return result;
+        }
+        
+    }
+}

@@ -1,0 +1,15 @@
+[Default]
+MarkExposure=7000
+MatrixExposure=10000
+[AAC]
+MarkExposure=1300
+MatrixExposure=3003
+[ST]
+MarkExposure=4000
+MatrixExposure=5500
+[GEORTEK]
+MarkExposure=3500
+MatrixExposure=1200
+[KNOWLES]
+MarkExposure=2000
+MatrixExposure=7000

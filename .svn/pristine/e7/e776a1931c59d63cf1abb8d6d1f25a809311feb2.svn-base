@@ -1,0 +1,197 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using HalconDotNet;
+
+namespace PylonLiveView
+{
+    public class Halcon
+    {
+        // Local iconic variables 
+        //private HObject ho_Image, ho_SymbolXLDs;
+        //// Local control variables 
+        //private HTuple hv_AcqHandle, hv_Pointer, hv_Type, hv_Width;
+        //private HTuple hv_Height;
+
+        private int m_Columns_Max = 30;   //最多列
+        private int m_Columns_Min = 5;   //最少列
+        private int m_Rows_Max = 30;      //最多行  
+        private int m_Rows_Min = 5;     //最少行
+        private int m_MinLength = 0;
+
+        public Halcon()
+        {
+            
+        }
+
+        public string Decode(string filename)
+        {
+            HObject ho_Image, ho_SymbolXLDs;
+            try
+            {
+                // Initialize local and output iconic variables 
+                HOperatorSet.GenEmptyObj(out ho_Image);
+                HOperatorSet.GenEmptyObj(out ho_SymbolXLDs);
+                HTuple hv_DataCodeHandle, hv_ResultHandles, hv_DecodedDataStrings;
+
+                //Application.DoEvents();
+                HOperatorSet.ReadImage(out ho_Image, filename);
+                HOperatorSet.CreateDataCode2dModel("Data Matrix ECC 200", new HTuple(), new HTuple(), out hv_DataCodeHandle);
+                HOperatorSet.SetDataCode2dParam(hv_DataCodeHandle, "default_parameters", "enhanced_recognition");
+                if (m_Columns_Max > 0)
+                {
+                    HOperatorSet.SetDataCode2dParam(hv_DataCodeHandle, "symbol_cols_max", m_Columns_Max);
+                }
+                if (m_Rows_Max > 0)
+                {
+                    HOperatorSet.SetDataCode2dParam(hv_DataCodeHandle, "symbol_rows_max", m_Rows_Max);
+                }
+                if (m_Columns_Min > 0)
+                {
+                    //HOperatorSet.SetDataCode2dParam(hv_DataCodeHandle, "symbol_cols_min", m_Columns_Min);
+                }
+                if (m_Rows_Min > 0)
+                {
+                    //HOperatorSet.SetDataCode2dParam(hv_DataCodeHandle, "symbol_rows_min", m_Rows_Min);
+                }
+                HOperatorSet.FindDataCode2d(ho_Image, out ho_SymbolXLDs, hv_DataCodeHandle, "train", "all", out hv_ResultHandles, out hv_DecodedDataStrings);
+                //HOperatorSet.FindDataCode2d(ho_Image, out ho_SymbolXLDs, hv_DataCodeHandle, new HTuple(), new HTuple(), out hv_ResultHandles, out hv_DecodedDataStrings);
+                string result = hv_DecodedDataStrings.ToString();
+                //try
+                //{
+                //    HOperatorSet.ClearObj(ho_Image);
+                //    ho_Image.Dispose();
+                //    ho_Image = null;
+                //}
+                //catch { } 
+                //try
+                //{
+                //    HOperatorSet.ClearObj(ho_SymbolXLDs);
+                //    ho_SymbolXLDs.Dispose();
+                //    ho_SymbolXLDs = null;
+                //}
+                //catch { }
+                //try { HOperatorSet.ClearDataCode2dModel(hv_DataCodeHandle); }
+                //catch { }
+                //hv_ResultHandles = null;
+                //hv_DecodedDataStrings = null;
+                //hv_ResultHandles = null;
+                return result;
+            }
+            catch { }
+            return "";
+        }
+
+        /*
+        public List<string> Decode(string filename)
+        {
+            HObject ho_Image, ho_SymbolXLDs;
+            List<string> list_result = new List<string>();
+            try
+            {
+                // Initialize local and output iconic variables 
+                HOperatorSet.GenEmptyObj(out ho_Image);
+                HOperatorSet.GenEmptyObj(out ho_SymbolXLDs);
+                HTuple hv_DataCodeHandle, hv_ResultHandles, hv_DecodedDataStrings;
+                HTuple hv_ResultValues1;
+                HTuple train = "train";
+                HTuple all = "all";
+
+                //Application.DoEvents();
+                HOperatorSet.ReadImage(out ho_Image, filename);
+                HOperatorSet.CreateDataCode2dModel("Data Matrix ECC 200", new HTuple(), new HTuple(), out hv_DataCodeHandle);
+                HOperatorSet.SetDataCode2dParam(hv_DataCodeHandle, "default_parameters", "enhanced_recognition");
+                ho_SymbolXLDs.Dispose();
+                try
+                {
+                    HOperatorSet.FindDataCode2d(ho_Image, out ho_SymbolXLDs, hv_DataCodeHandle, train, all, out hv_ResultHandles, out hv_DecodedDataStrings);
+                    for (int i = 0; i < hv_ResultHandles.Length; ++i)
+                    {
+                        HOperatorSet.GetDataCode2dResults(hv_DataCodeHandle, hv_ResultHandles[i], "decoded_string", out hv_ResultValues1);
+                        list_result.Add(hv_ResultValues1);
+                    }
+                }
+                catch { }
+                try
+                {
+                    ho_Image.Dispose();
+                    ho_Image = null;
+                }
+                catch { }
+                hv_DataCodeHandle = null;
+                hv_ResultHandles = null;
+                hv_DecodedDataStrings = null;
+                hv_ResultHandles = null;
+            }
+            catch (Exception ex)
+            {
+                logWR.appendNewLogMessage("条码解析(HALCON)过程异常: \r\n" + ex.ToString());
+            }
+            return list_result;
+        }
+        */
+
+        public void releaseMemory()
+        {
+            //try { HOperatorSet.CloseAllBgEsti(); }
+            //catch { }
+            //try { HOperatorSet.CloseAllClassBox(); }
+            //catch { }
+            try { HOperatorSet.CloseAllFiles(); }
+            catch (Exception e)
+            {
+                string str = "清理HALCON内存(HOperatorSet.CloseAllFiles)过程出错; \r\n" + e.ToString();
+                logWR.appendNewLogMessage(str);
+            }
+            //try { HOperatorSet.CloseAllFramegrabbers(); }
+            //catch { }
+            ////try { HOperatorSet.CloseAllMeasures(); }
+            ////catch { }
+            ////try { HOperatorSet.CloseAllOcrs(); }
+            ////catch { }
+            ////try { HOperatorSet.CloseAllOcvs(); }
+            ////catch { }
+            ////try { HOperatorSet.CloseAllSerials(); }
+            ////catch { }
+            ////try { HOperatorSet.ReleaseAllComputeDevices(); }
+            ////catch { }
+            //try { HOperatorSet.ClearAllBarCodeModels(); }
+            //catch { }
+            //try { HOperatorSet.ClearAllBarriers(); }
+            //catch { }
+            //try { HOperatorSet.ClearAllCalibData(); }
+            //catch { }
+            ////try { HOperatorSet.ClearAllCameraSetupModels(); }
+            ////catch { }
+            //try { HOperatorSet.ClearAllClassGmm(); }
+            //catch { }
+            //try { HOperatorSet.ClearAllClassLut(); }
+            //catch { }
+            //try { HOperatorSet.ClearAllClassMlp(); }
+            //catch { }
+            ////try { HOperatorSet.ClearAllClassSvm(); }
+            ////catch { }
+            ////try { HOperatorSet.ClearAllColorTransLuts(); }
+            ////catch { }
+            try { HOperatorSet.ClearAllComponentModels(); }
+            catch (Exception e)
+            {
+                string str = "清理HALCON内存(HOperatorSet.ClearAllComponentModels)过程出错; \r\n" + e.ToString();
+                logWR.appendNewLogMessage(str);
+            }
+            //try { HOperatorSet.ClearAllConditions(); }
+            //catch { }
+            try { HOperatorSet.ClearAllDataCode2dModels(); }
+            catch (Exception e)
+            {
+                string str = "清理HALCON内存(HOperatorSet.ClearAllDataCode2dModels)过程出错; \r\n" + e.ToString();
+                logWR.appendNewLogMessage(str);
+            }
+            ////try { HOperatorSet.ClearAllDeformableModels(); }
+            ////catch { }
+            ////try { HOperatorSet.ClearAllDescriptorModels(); }
+            ////catch { }
+        }
+    }
+}

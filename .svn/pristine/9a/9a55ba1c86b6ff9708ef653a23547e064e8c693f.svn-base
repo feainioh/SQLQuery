@@ -1,0 +1,153 @@
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Text;
+using System.Windows.Forms;
+using Euresys.Open_eVision_1_2;
+using System.Threading;
+using System.IO;
+using PylonLiveView;
+using PylonLiveView;
+using PylonLiveView;
+using System.Drawing.Imaging;
+
+
+namespace PylonLiveView
+{
+    public partial class Welcome : Form
+    {
+        List<Panel> m_panelList = new List<Panel>();
+        int count = 1; //1-6 
+        MyFunctions myfunction = new MyFunctions();
+        ManualResetEvent startMain = new ManualResetEvent(false);
+        public Welcome()
+        {
+            UpdateClass UC = new UpdateClass();
+            UC.GetVersion();
+            InitializeComponent();
+            //Application.VisualStyleState = System.Windows.Forms.VisualStyles.VisualStyleState.NoneEnabled;
+        }
+
+
+        private void button_select_Click(object sender, EventArgs e)
+        {
+            if (radioButton_mic.Checked)
+            {
+                //GlobalVar.gl_FlowID = 7;
+                GlobalVar.gl_LinkType = LinkType.MIC;
+                label_type.Text = "MIC關聯";
+            }
+            else if (radioButton_prox.Checked)
+            {
+                //GlobalVar.gl_FlowID = 6;
+                GlobalVar.gl_LinkType = LinkType.PROX;
+                label_type.Text = "PROX關聯";
+            }
+            groupBox1.Visible = false;
+            button_select.Visible = false;
+            startUp();
+        }
+
+        private void startUp()
+        {
+            try
+            {
+                Thread thread_initEvision = new Thread(initEvision);
+                thread_initEvision.IsBackground = true;
+                thread_initEvision.Start();
+                //startMain.WaitOne();
+            }
+            catch
+            {
+                /* Stop the grabbing. */
+                try
+                {
+                    if (GlobalVar.gl_imageProvider != null)
+                        GlobalVar.gl_imageProvider.Stop();
+                }
+                catch { }
+                try
+                {
+                    if (GlobalVar.gl_imageProvider != null)
+                        GlobalVar.gl_imageProvider.Close();
+                }
+                catch { }
+            }
+        }
+
+        private void initEvision()
+        {
+            try
+            {
+                MatrixDecode decoder = new MatrixDecode();
+                EMatrixCode EMatrixCodeReaderResult = new EMatrixCode();
+                EMatrixCodeReader EMatrixCodeReader1 = new EMatrixCodeReader();
+                EMatcher match = new EMatcher();
+                Bitmap bmp = new Bitmap(640, 480);
+                EImageBW8 bw8image = ConvertBitmapToEImageBW8(bmp);
+            }
+            catch { }
+            finally
+            {
+                this.DialogResult = DialogResult.OK;
+                //startMain.Set();
+            }
+        }
+
+        public EImageBW8 ConvertBitmapToEImageBW8(Bitmap bmp)
+        {
+            try
+            {
+                EImageBW8 EBW8Image1 = new EImageBW8(bmp.Width, bmp.Height); // EImageBW8 instance
+                //EImageC24 eimageC24 = new EImageC24(bmp.Width, bmp.Height); // EImageC24 instance
+
+                Rectangle rect = new Rectangle(0, 0, bmp.Width, bmp.Height);
+                //锁定位图
+                System.Drawing.Imaging.BitmapData bmpdata_src = bmp.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+                //获取首行地址
+                IntPtr pScan0 = bmpdata_src.Scan0;
+                unsafe
+                {
+                    try
+                    {
+                        for (int Height = 0; Height < bmpdata_src.Height; Height++)
+                        {
+                            byte* pSrc = (byte*)pScan0;
+                            pSrc += bmpdata_src.Stride * Height;
+                            byte* pDest = (byte*)EBW8Image1.GetImagePtr(0, Height);
+                            for (int Width = 0; Width < bmpdata_src.Width; Width++)
+                            {
+                                pDest[0] = (byte)(pSrc[0] * 0.3 + pSrc[1] * 0.6 + pSrc[2] * 0.1);
+                                pSrc += 3;
+                                pDest++;
+                            }
+                        }
+                    }
+                    catch { }
+                }
+                bmp.UnlockBits(bmpdata_src);
+                return EBW8Image1;
+            }
+            catch
+            {
+                return new EImageBW8(640, 480);
+            }
+        }
+
+        private void button_quit_Click(object sender, EventArgs e)
+        {
+            DialogResult = DialogResult.Cancel;
+        }
+
+        private void Welcome_FormClosing(object sender, FormClosingEventArgs e)
+        {
+
+        }
+
+        private void Welcome_Shown(object sender, EventArgs e)
+        {
+        }
+    }
+}
